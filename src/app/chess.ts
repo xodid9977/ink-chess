@@ -13,6 +13,7 @@ import { illegalText, pick } from '../ui/panel';
 import { moveLine, situation } from './narrator';
 import { rad } from '../util/noise';
 import { promoteAnim } from '../motion/promote';
+import { LEVELS, think } from '../core/ai/engine';
 
 const batchim = (w: string): boolean => (w.charCodeAt(w.length - 1) - 0xac00) % 28 !== 0;
 export const iga = (w: string): string => w + (batchim(w) ? '이' : '가');
@@ -30,6 +31,10 @@ export class ChessCtl {
   duel: DuelRun | null = null;
   mode: DuelMode = 'full';
   vsAI = false;
+  /** 컴퓨터 난이도 1~5 */
+  level = 3;
+  thinking = false;
+  private aiToken = 0;
   say: (t: string) => void = () => undefined;
   onTurn: (t: string) => void = () => undefined;
   /** 승급할 말 고르기 (화면에서 연결) */
@@ -211,7 +216,7 @@ export class ChessCtl {
     if (sit && !this.game.inCheck()) gsap.delayedCall(0.9, () => this.say(sit));
     this.status();
     this.busy = false;
-    if (this.vsAI && this.game.turn() === 'b' && this.game.status() === 'play') gsap.delayedCall(0.6, () => this.aiTurn());
+    if (this.vsAI && this.game.turn() === 'b' && this.game.status() === 'play') gsap.delayedCall(0.4, () => void this.aiTurn());
   }
 
   private redraw(ent: PieceEnt, to: PieceType, text?: string): Promise<void> {
@@ -224,13 +229,32 @@ export class ChessCtl {
     });
   }
 
-  aiTurn(): void {
-    const m = this.game.aiMove();
-    if (m) void this.execute(m);
+  /** 컴퓨터 차례: 난이도에 맞춰 별도 작업자에서 생각한 뒤 둔다 */
+  async aiTurn(): Promise<void> {
+    const token = ++this.aiToken;
+    this.thinking = true;
+    this.busy = true;
+    if (this.level >= 4) this.say(pick(['…잠시, 생각할 시간이 필요하다.', '잉크가 천천히 번진다. 나는 생각 중이다.']));
+    const fen = this.game.chess.fen();
+    const [r] = await Promise.all([think(fen, this.level), new Promise((res) => gsap.delayedCall(0.5, res))]);
+    if (token !== this.aiToken) return; // 그사이 새 게임·뒤로 가기로 취소됨
+    this.thinking = false;
+    this.busy = false;
+    const m = (r && (this.game.find(r.from, r.to, 'q') ?? this.game.find(r.from, r.to))) || this.game.aiMove();
+    if (m) await this.execute(m);
+  }
+
+  /** 생각 중인 컴퓨터를 멈춤 */
+  cancelAI(): void {
+    if (!this.thinking) return;
+    this.aiToken++;
+    this.thinking = false;
+    this.busy = false;
   }
 
   // ---------- 뒤로 가기: 한 수를 거꾸로 스르륵 ----------
   async undo(): Promise<void> {
+    this.cancelAI();
     if (this.busy) return;
     const steps = this.vsAI && this.game.turn() === 'w' && this.game.chess.history().length >= 2 ? 2 : 1;
     if (!this.game.chess.history().length) { this.say('되돌릴 수가 없다. 아직 아무것도 쓰이지 않았다.'); return; }
@@ -286,6 +310,7 @@ export class ChessCtl {
 
   // ---------- 새 게임 (판 엎기) ----------
   async newGame(): Promise<void> {
+    this.cancelAI();
     if (this.busy && this.game.chess.history().length) return;
     this.busy = true;
     this.deselect();
@@ -294,7 +319,8 @@ export class ChessCtl {
     this.w.drops.stains = [];
     this.sync();
     await drawIn(this.w.pieces);
-    this.say(this.vsAI ? '새 페이지. 너는 백, 나는 흑이다. 먼저 두어라.' : '새 페이지가 펼쳐진다. 백부터 시작한다.');
+    const lv = LEVELS[this.level - 1];
+    this.say(this.vsAI ? `새 페이지. 너는 백, 나는 흑이다. 오늘의 나는 ${lv.name}(난이도 ${lv.n}). 먼저 두어라.` : '새 페이지가 펼쳐진다. 백부터 시작한다.');
     this.busy = false;
   }
 }

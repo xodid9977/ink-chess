@@ -18,6 +18,7 @@ import { World } from './render/world';
 import { drawIn } from './motion/moves';
 import { $, diary, setLoading, setTurn, write } from './ui/panel';
 import { pickPromotion } from './ui/promoPicker';
+import { LEVELS } from './core/ai/engine';
 
 const canvas = $<HTMLCanvasElement>('board');
 const stage = $('stage');
@@ -37,6 +38,7 @@ function resize(): void {
 async function run(cmd: Cmd | null, heard: string): Promise<void> {
   if (!cmd) { diary(`'${heard}' …무슨 뜻인지 모르겠다. 예: e2 e4, 새 게임, 뒤로, 판 뒤집기`); return; }
   if (cmd.kind === 'new' && ctl.duel) ctl.duel.skip();
+  if (cmd.kind === 'new' || cmd.kind === 'undo') ctl.cancelAI();
   // 말이 아직 움직이는 중이면 끝날 때까지 기다렸다가 실행
   for (let i = 0; i < 80 && ctl.busy && !ctl.duel; i++) await new Promise((r) => gsap.delayedCall(0.1, r));
   if (ctl.busy) { diary('잠깐, 펜이 아직 움직이는 중이다.'); return; }
@@ -132,22 +134,43 @@ window.addEventListener('keydown', (e) => {
 });
 
 // ---------- 시작 화면: 빈 일기장에 무엇이든 쓰면 시작 ----------
-let phase: 'ask' | 'mode' | 'done' = 'ask';
+let phase: 'ask' | 'mode' | 'level' | 'done' = 'ask';
 const introPad = new InkPad($<HTMLCanvasElement>('intro-pad'));
 introPad.idleMs = 1100;
 
 function askMode(): void {
   phase = 'mode';
   write('intro-text', '체스를 두자. 혼자 둘 것인가, 둘이서 둘 것인가?', 2);
+  introHint('1(혼자) 또는 2(둘이서)를 써 보세요');
   window.setTimeout(() => write('intro-text', '1 또는 2를 써라.', 2), 1900);
   $('intro-choices').hidden = false;
 }
 
-function startGame(solo: boolean): void {
+function introHint(t: string): void {
+  const el = document.querySelector('#intro-pad-wrap .pad-hint span');
+  if (el) el.textContent = t;
+}
+
+/** 혼자 두기: 상대(일기장)의 강함 1~5를 묻는다 */
+function askLevel(): void {
+  phase = 'level';
+  $('intro-choices').hidden = true;
+  write('intro-text', '혼자라… 나는 얼마나 강해야 하지?', 2);
+  introHint('1~5 중 숫자 하나를 써 보세요 — 숫자가 클수록 강함');
+  window.setTimeout(() => write('intro-text', '1부터 5까지, 숫자 하나를 써라.', 2), 1800);
+  $('level-choices').hidden = false;
+}
+
+function startGame(solo: boolean, level?: number): void {
   if (phase === 'done') return;
+  if (solo && level === undefined) { askLevel(); return; }
   phase = 'done';
   ctl.vsAI = solo;
-  write('intro-text', solo ? '좋다. 너는 백, 나는 흑이다.' : '좋다. 둘이서 펜을 나누어 쥐어라.', 2);
+  syncLevelBtn();
+  if (level) setLevel(level, false);
+  $('level-choices').hidden = true;
+  const lv = LEVELS[ctl.level - 1];
+  write('intro-text', solo ? `좋다. 오늘의 나는 ${lv.name}. 너는 백, 나는 흑이다.` : '좋다. 둘이서 펜을 나누어 쥐어라.', 2);
   window.setTimeout(() => {
     $('intro').classList.add('leaving');
     window.setTimeout(() => { $('intro').hidden = true; }, 900);
@@ -172,15 +195,45 @@ function introHeard(cmd: Cmd | null): void {
 introPad.onDone = (strokes) => {
   introPad.clear();
   $('intro-pad-wrap').classList.remove('inked');
-  // 시작 화면에서는 어떤 글씨든 '시작하자'는 뜻으로 받아들인다. 모드 질문에서는 숫자 1/2를 읽는다.
+  // 시작 화면에서는 어떤 글씨든 '시작하자'는 뜻으로 받아들인다. 질문에는 숫자를 읽는다.
   if (phase === 'mode') {
     const d = readDigit(strokes, ['1', '2']);
     introHeard(d === '1' ? { kind: 'solo' } : d === '2' ? { kind: 'duo' } : null);
+  } else if (phase === 'level') {
+    const d = readDigit(strokes, ['1', '2', '3', '4', '5']);
+    if (d) startGame(true, Number(d));
+    else write('intro-text', '1부터 5 사이의 숫자 하나만 또박또박 써라.', 2);
   } else introHeard({ kind: 'start' });
 };
 $<HTMLCanvasElement>('intro-pad').addEventListener('pointerdown', () => $('intro-pad-wrap').classList.add('inked'));
 document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) =>
   b.addEventListener('click', () => startGame(b.dataset.mode === 'solo')));
+
+// 난이도 고르기 버튼 (시작 화면)
+for (const lv of LEVELS) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.innerHTML = `<b>${lv.n}</b><span>${lv.name}</span>`;
+  b.title = lv.desc;
+  b.setAttribute('aria-label', `난이도 ${lv.n}: ${lv.name}, ${lv.desc}`);
+  b.addEventListener('click', () => startGame(true, lv.n));
+  $('level-choices').appendChild(b);
+}
+
+// ---------- 난이도 (대국 중에도 바꿀 수 있음) ----------
+const lvBtn = $<HTMLButtonElement>('btn-level');
+function setLevel(n: number, announce = true): void {
+  ctl.level = n;
+  try { localStorage.setItem('ink.level', String(n)); } catch { /* 저장 불가 */ }
+  const lv = LEVELS[n - 1];
+  lvBtn.textContent = `난이도: ${n}`;
+  lvBtn.title = `${lv.name} — ${lv.desc}`;
+  if (announce) diary(`이제부터 나는 ${lv.name}(난이도 ${n})처럼 둔다.`);
+}
+try { const saved = Number(localStorage.getItem('ink.level')); if (saved >= 1 && saved <= 5) setLevel(saved, false); else setLevel(3, false); } catch { setLevel(3, false); }
+lvBtn.addEventListener('click', () => setLevel((ctl.level % 5) + 1));
+const syncLevelBtn = (): void => { lvBtn.hidden = !ctl.vsAI; };
+syncLevelBtn();
 
 // ---------- 루프 ----------
 window.addEventListener('resize', resize);
