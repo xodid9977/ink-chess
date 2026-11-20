@@ -9,8 +9,8 @@
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icons/apple-180.png" />
     <title>잉크 체스</title>
-    <script type="module" crossorigin src="./assets/index-CXNJNSDi.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-D4MGgzRl.css">
+    <script type="module" crossorigin src="./assets/index-DojUfVzb.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Cy6p35WL.css">
   <link rel="manifest" href="./manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
   <body>
     <main id="app">
@@ -31,6 +31,7 @@
           <button type="button" data-cmd="new">새 게임</button>
           <button type="button" data-cmd="undo">뒤로</button>
           <button type="button" data-cmd="flip">판 뒤집기</button>
+          <button type="button" id="btn-level" hidden>난이도: 3</button>
           <button type="button" id="btn-duel">결투: 전부</button>
           <button type="button" id="btn-sound">소리 켬</button>
         </nav>
@@ -48,6 +49,7 @@
           <button type="button" data-mode="solo">혼자 (1)</button>
           <button type="button" data-mode="duo">둘이서 (2)</button>
         </div>
+        <div id="level-choices" class="level-choices ink" hidden></div>
       </div>
     </div>
     <!-- 글자 가장자리를 종이에 스민 잉크처럼 거칠고 번지게 -->
