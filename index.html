@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#f1eee7" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icons/apple-180.png" />
+    <title>잉크 체스</title>
+    <script type="module" crossorigin src="./assets/index-CXNJNSDi.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-D4MGgzRl.css">
+  <link rel="manifest" href="./manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
+  <body>
+    <main id="app">
+      <section id="stage">
+        <canvas id="board"></canvas>
+        <div id="loading">펜을 준비하는 중…</div>
+        <div id="promo" role="dialog" aria-modal="true" aria-labelledby="promo-title" hidden>
+          <div class="promo-card ink">
+            <p id="promo-title">무엇이 될 것인가?</p>
+            <div id="promo-row" class="promo-row"></div>
+          </div>
+        </div>
+      </section>
+      <aside id="side">
+        <div id="turn" data-align="top" aria-live="polite"></div>
+        <div id="diary" data-align="top" aria-live="polite"></div>
+        <nav class="menu ink">
+          <button type="button" data-cmd="new">새 게임</button>
+          <button type="button" data-cmd="undo">뒤로</button>
+          <button type="button" data-cmd="flip">판 뒤집기</button>
+          <button type="button" id="btn-duel">결투: 전부</button>
+          <button type="button" id="btn-sound">소리 켬</button>
+        </nav>
+      </aside>
+    </main>
+
+    <div id="intro">
+      <div class="intro-page">
+        <div id="intro-text" data-align="top" aria-live="polite"></div>
+        <div id="intro-pad-wrap" class="pad-wrap big">
+          <canvas id="intro-pad" aria-label="빈 일기장: 펜으로 무엇이든 쓰세요"></canvas>
+          <span class="pad-hint ink"><span>펜이나 손가락으로 써 보세요 — 예: 체스</span></span>
+        </div>
+        <div id="intro-choices" class="menu ink" hidden>
+          <button type="button" data-mode="solo">혼자 (1)</button>
+          <button type="button" data-mode="duo">둘이서 (2)</button>
+        </div>
+      </div>
+    </div>
+    <!-- 글자 가장자리를 종이에 스민 잉크처럼 거칠고 번지게 -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <filter id="ink-bleed" x="-10%" y="-30%" width="120%" height="160%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="1.6" result="rough" />
+        <feGaussianBlur in="rough" stdDeviation="1.4" result="halo" />
+        <feComponentTransfer in="halo" result="soft"><feFuncA type="linear" slope="0.55" /></feComponentTransfer>
+        <feMerge><feMergeNode in="soft" /><feMergeNode in="rough" /></feMerge>
+      </filter>
+    </svg>
+  </body>
+</html>
